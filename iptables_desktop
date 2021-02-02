@@ -12,8 +12,10 @@ INTERFACE='wlan0'
 IN_INTERFACE="-i ${INTERFACE}"
 OUT_INTERFACE="-o ${INTERFACE}"
 
-OUTBOUND_TCP_SERVICES="80 443 853 123"
-OUTBOUND_UDP_SERVICES="53 123"
+OUTBOUND_TCP_SERVICES='80 443 853 123 22'
+OUTBOUND_UDP_SERVICES='53 123'
+INBOUND_TCP_SERVICES=''
+INBOUND_UDP_SERVICES=''
 
 print_usage(){
   usage="";
@@ -37,21 +39,23 @@ check_run_as_root(){
   fi
 }
 
-iptables_rules(){
+enable_firewall(){
+  apt-get -yy install iptables iptables-persistent
   clear_rules
   set_rules
-}
-
-ip6tables_rules(){
   clear_rules ip6tables
   set_rules ip6tables
+  netfilter-persistent save
+  systemctl enable netfilter-persistent.service
 }
 
 disable_firewall(){
   clear_rules
   set_permissive_default_policies
   clear_rules ip6tables
-  set_permissive_default_policies ip6tables  
+  set_permissive_default_policies ip6tables 
+  netfilter-persistent save
+  systemctl disable netfilter-persistent.service
 }
 
 set_rules(){
@@ -64,37 +68,56 @@ set_rules(){
   #Create chains for logging  
   #logs a match then drops the packet
   ${IPTABLES} --new-chain LOG_DROP  
-  ${IPTABLES} --append LOG_DROP --jump LOG --log-prefix "DROP:" --log-level 6
+  ${IPTABLES} --append LOG_DROP --jump LOG --log-prefix "iptables: DROP:" --log-level 6
   ${IPTABLES} --append LOG_DROP --jump DROP
   #logs a match then accepts the packet
   ${IPTABLES} --new-chain LOG_ACCEPT
-  ${IPTABLES} --append LOG_ACCEPT --jump LOG --log-prefix "ACCEPT:" --log-level 6
+  ${IPTABLES} --append LOG_ACCEPT --jump LOG --log-prefix "iptables: ACCEPT:" --log-level 6
   ${IPTABLES} --append LOG_ACCEPT --jump ACCEPT
   
   #allow local loopback
   ${IPTABLES} --append INPUT -i lo --jump LOG_ACCEPT
   ${IPTABLES} --append OUTPUT -o lo --jump LOG_ACCEPT
-    
-  #outbound tcp services, run though the array at top and set up.
-  for service in ${OUTBOUND_TCP_SERVICES}; do
-    ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-    ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-  done
   
-  #outbound udp services, run though the array at top and set up.
-  for service in ${OUTBOUND_UDP_SERVICES}; do
-    ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-    ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-  done
-  
-  #allow outbound icmp, icmpv6 is used in ip6tables so had to put this if in here.
-  if [[ ${IPTABLES} = 'iptables' ]]; then
-    iptables --append INPUT ${IN_INTERFACE} -p icmp --icmp-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-    iptables --append OUTPUT ${OUT_INTERFACE} -p icmp --icmp-type 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-  else
-    ip6tables --append INPUT ${IN_INTERFACE} -p icmpv6 --icmpv6-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-    ip6tables --append OUTPUT ${OUT_INTERFACE} -p icmpv6 --icmpv6-type 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  if [ -n "${OUTBOUND_TCP_SERVICES}" ]; then
+    #outbound tcp services, run though the array at top and set up.
+    for service in ${OUTBOUND_TCP_SERVICES}; do
+      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+    done
   fi
+  
+  if [ -n "${OUTBOUND_UDP_SERVICES}" ]; then
+    #outbound udp services, run though the array at top and set up.
+    for service in ${OUTBOUND_UDP_SERVICES}; do
+      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+    done
+  fi
+  
+  if [ -n "${INBOUND_TCP_SERVICES}" ]; then
+    #inbound tcp services, run though the array at top and set up.
+    for service in ${INBOUND_TCP_SERVICES}; do
+      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    done
+  fi
+  
+  if [ -n "${INBOUND_UDP_SERVICES}" ]; then
+    #inbound udp services, run though the array at top and set up.
+    for service in ${INBOUND_UDP_SERVICES}; do
+      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    done
+  fi
+  
+  local icmp='-p icmp --icmp-type '
+  #allow outbound icmp, icmpv6 is used in ip6tables so had to put this if in here.
+  if [[ ${IPTABLES} = 'ip6tables' ]]; then
+    icmp='-p icmpv6 --icmpv6-type '
+  fi
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} ${icmp} 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} ${icmp} 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
   
   #catchall
   ${IPTABLES} --append INPUT ${IN_INTERFACE} --jump LOG_DROP
@@ -133,17 +156,10 @@ main(){
   case $1 in
     enable|-e)
       #install iptables, and the iptables-persistent package which can load your rules on startup
-      apt-get -yy install iptables iptables-persistent
-      #apply rules
-      iptables_rules
-      ip6tables_rules
-      netfilter-persistent save
-      systemctl enable netfilter-persistent.service
+      enable_firewall
       ;;
     disable|-d)
       disable_firewall;
-      netfilter-persistent save
-      systemctl disable netfilter-persistent.service
       ;;
     help|-h)
       #print help
