@@ -94,7 +94,7 @@ set_rules(){
   
   #allow outbound icmp, icmpv6 is used in ip6tables so had to put this if in here.
   if [[ ${IPTABLES} = 'iptables' ]]; then
-    iptables --append INPUT -${IN_INTERFACE} -p icmp --icmp-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    iptables --append INPUT ${IN_INTERFACE} -p icmp --icmp-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
     iptables --append OUTPUT ${OUT_INTERFACE} -p icmp --icmp-type 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
   else
     ip6tables --append INPUT ${IN_INTERFACE} -p icmpv6 --icmpv6-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
