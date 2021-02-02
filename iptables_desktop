@@ -1,7 +1,9 @@
 #!/bin/bash
 set -eu
 
-# applies a basic iptables firewall
+# applies a basic iptables firewall for a desktop linux pc
+# allows http,https, dns, dns over tls, ntp and ntpsec, and outbound pings
+# meant to be absolutely bare bones 
 
 INTERFACE='wlan0';
 
@@ -148,7 +150,7 @@ main(){
     disable|-d)
       disable_firewall;
       netfilter-persistent save
-      systemctl enable netfilter-persistent.service
+      systemctl disable netfilter-persistent.service
       ;;
     help|-h)
       #print help
