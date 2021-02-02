@@ -157,14 +157,14 @@ main(){
       enable_firewall
       ;;
     disable|-d|-D)
-      disable_firewall;
+      disable_firewall
       ;;
     help|-h|-H)
       #print help
-      print_usage;
+      print_usage
       ;;
     *)
-      print_usage;
+      print_usage
       ;;
   esac
    
@@ -173,4 +173,4 @@ main(){
 }
 
 # Run program
-main "${1:-'-h'}";
+main "${1:-'-h'}"
