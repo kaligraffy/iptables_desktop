@@ -18,3 +18,5 @@ If you do, change the script or use the iptables --insert so your rules don't en
 Tested for debian (uses apt)
 
 Outputs logs to the syslog
+
+Usage: set your ports and interface at the top and run the script
