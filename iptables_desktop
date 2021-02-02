@@ -31,7 +31,6 @@ HERE
 }
 
 check_run_as_root(){
-  
   if (( EUID != 0 )); then
     echo "This script must be run as root/sudo"
     exit 1
@@ -76,14 +75,13 @@ set_rules(){
   ${IPTABLES} --append INPUT -i lo --jump LOG_ACCEPT
   ${IPTABLES} --append OUTPUT -o lo --jump LOG_ACCEPT
     
-    
-  #outbound tcp serrvices, run though the array at top and set up.
+  #outbound tcp services, run though the array at top and set up.
   for service in ${OUTBOUND_TCP_SERVICES}; do
     ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
     ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
   done
   
-  #outbound tcp serrvices, run though the array at top and set up.
+  #outbound udp services, run though the array at top and set up.
   for service in ${OUTBOUND_UDP_SERVICES}; do
     ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
     ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
@@ -103,8 +101,7 @@ set_rules(){
   ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} --jump LOG_DROP
   
   #print the rules
-  ${IPTABLES} --list --verbose --line-numbers
-  
+  ${IPTABLES} --list --numeric --verbose --line-numbers  
 }
 
 clear_rules(){
