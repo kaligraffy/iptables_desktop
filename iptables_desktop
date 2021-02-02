@@ -1,6 +1,7 @@
 #!/bin/bash
-set -eu
+# shellcheck disable=SC2086
 
+set -eu
 # applies a basic iptables firewall for a desktop linux pc
 # allows http,https, dns, dns over tls, ntp and ntpsec, and outbound pings
 # meant to be absolutely bare bones 
