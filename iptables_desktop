@@ -18,7 +18,7 @@ INBOUND_TCP_SERVICES=''
 INBOUND_UDP_SERVICES=''
 
 print_usage(){
-  usage="";
+  local usage="";
   usage=$(cat << 'HERE' 
   
 Usage: sudo ./iptables_desktop ARG1
@@ -59,92 +59,92 @@ disable_firewall(){
 }
 
 set_rules(){
-  IPTABLES="${1:-iptables}"
+  local iptables="${1:-iptables}"
   #set a restrictive default (so we can only allow in/out exactly what we want)
-  set_default_policies ${IPTABLES} DROP
+  set_default_policies ${iptables} DROP
   
   #Create chains for logging  
   #logs a match then drops the packet
-  ${IPTABLES} --new-chain LOG_DROP  
-  ${IPTABLES} --append LOG_DROP --jump LOG --log-prefix "iptables: DROP:" --log-level 6
-  ${IPTABLES} --append LOG_DROP --jump DROP
+  ${iptables} --new-chain LOG_DROP  
+  ${iptables} --append LOG_DROP --jump LOG --log-prefix "iptables: DROP:" --log-level 6
+  ${iptables} --append LOG_DROP --jump DROP
   #logs a match then accepts the packet
-  ${IPTABLES} --new-chain LOG_ACCEPT
-  ${IPTABLES} --append LOG_ACCEPT --jump LOG --log-prefix "iptables: ACCEPT:" --log-level 6
-  ${IPTABLES} --append LOG_ACCEPT --jump ACCEPT
+  ${iptables} --new-chain LOG_ACCEPT
+  ${iptables} --append LOG_ACCEPT --jump LOG --log-prefix "iptables: ACCEPT:" --log-level 6
+  ${iptables} --append LOG_ACCEPT --jump ACCEPT
   
   #allow local loopback
-  ${IPTABLES} --append INPUT -i lo --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT -o lo --jump LOG_ACCEPT
+  ${iptables} --append INPUT -i lo --jump LOG_ACCEPT
+  ${iptables} --append OUTPUT -o lo --jump LOG_ACCEPT
   
   if [ -n "${OUTBOUND_TCP_SERVICES}" ]; then
     #outbound tcp services, run though the array at top and set up.
     for service in ${OUTBOUND_TCP_SERVICES}; do
-      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
     done
   fi
   
   if [ -n "${OUTBOUND_UDP_SERVICES}" ]; then
     #outbound udp services, run though the array at top and set up.
     for service in ${OUTBOUND_UDP_SERVICES}; do
-      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
     done
   fi
   
   if [ -n "${INBOUND_TCP_SERVICES}" ]; then
     #inbound tcp services, run though the array at top and set up.
     for service in ${INBOUND_TCP_SERVICES}; do
-      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
     done
   fi
   
   if [ -n "${INBOUND_UDP_SERVICES}" ]; then
     #inbound udp services, run though the array at top and set up.
     for service in ${INBOUND_UDP_SERVICES}; do
-      ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
     done
   fi
   
   local icmp='-p icmp --icmp-type '
   #allow outbound icmp, icmpv6 is used in ip6tables so had to put this if in here.
-  if [[ ${IPTABLES} = 'ip6tables' ]]; then
+  if [[ ${iptables} = 'ip6tables' ]]; then
     icmp='-p icmpv6 --icmpv6-type '
   fi
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} ${icmp} 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} ${icmp} 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  ${iptables} --append INPUT ${IN_INTERFACE} ${icmp} 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+  ${iptables} --append OUTPUT ${OUT_INTERFACE} ${icmp} 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
   
   #catchall
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} --jump LOG_DROP
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} --jump LOG_DROP
+  ${iptables} --append INPUT ${IN_INTERFACE} --jump LOG_DROP
+  ${iptables} --append OUTPUT ${OUT_INTERFACE} --jump LOG_DROP
   
   #print the rules
-  ${IPTABLES} --list --numeric --verbose --line-numbers  
+  ${iptables} --list --numeric --verbose --line-numbers  
 }
 
 clear_rules(){
-  IPTABLES="${1:-iptables}"
+  local iptables="${1:-iptables}"
  
   #delete all rules
-  ${IPTABLES} --flush
+  ${iptables} --flush
   
   #delete all chains
-  ${IPTABLES} --delete-chain
+  ${iptables} --delete-chain
   
   #zero any counters for network traffic
-  ${IPTABLES} --zero
+  ${iptables} --zero
 }
 
 set_default_policies(){
-  IPTABLES="${1:-iptables}"
+  local iptables="${1:-iptables}"
   POLICY="${2:-DROP}"
   #set a permissive default 
-  ${IPTABLES} --policy INPUT ${POLICY}
-  ${IPTABLES} --policy OUTPUT ${POLICY}
-  ${IPTABLES} --policy FORWARD ${POLICY}
+  ${iptables} --policy INPUT ${POLICY}
+  ${iptables} --policy OUTPUT ${POLICY}
+  ${iptables} --policy FORWARD ${POLICY}
 }
 
 main(){
