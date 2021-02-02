@@ -51,9 +51,9 @@ enable_firewall(){
 
 disable_firewall(){
   clear_rules
-  set_permissive_default_policies
+  set_default_policies iptables ACCEPT
   clear_rules ip6tables
-  set_permissive_default_policies ip6tables 
+  set_default_policies ip6tables ACCEPT
   netfilter-persistent save
   systemctl disable netfilter-persistent.service
 }
@@ -61,9 +61,7 @@ disable_firewall(){
 set_rules(){
   IPTABLES="${1:-iptables}"
   #set a restrictive default (so we can only allow in/out exactly what we want)
-  ${IPTABLES} --policy INPUT DROP
-  ${IPTABLES} --policy OUTPUT DROP
-  ${IPTABLES} --policy FORWARD DROP
+  set_default_policies ${IPTABLES} DROP
   
   #Create chains for logging  
   #logs a match then drops the packet
@@ -140,13 +138,13 @@ clear_rules(){
   ${IPTABLES} --zero
 }
 
-set_permissive_default_policies(){
+set_default_policies(){
   IPTABLES="${1:-iptables}"
-
+  POLICY="${2:-DROP}"
   #set a permissive default 
-  ${IPTABLES} --policy INPUT ACCEPT
-  ${IPTABLES} --policy OUTPUT ACCEPT
-  ${IPTABLES} --policy FORWARD ACCEPT
+  ${IPTABLES} --policy INPUT ${POLICY}
+  ${IPTABLES} --policy OUTPUT ${POLICY}
+  ${IPTABLES} --policy FORWARD ${POLICY}
 }
 
 main(){
@@ -154,14 +152,14 @@ main(){
   check_run_as_root
   
   case $1 in
-    enable|-e)
+    enable|-e|-E)
       #install iptables, and the iptables-persistent package which can load your rules on startup
       enable_firewall
       ;;
-    disable|-d)
+    disable|-d|-D)
       disable_firewall;
       ;;
-    help|-h)
+    help|-h|-H)
       #print help
       print_usage;
       ;;
