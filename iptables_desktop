@@ -6,11 +6,14 @@ set -eu
 # allows http,https, dns, dns over tls, ntp and ntpsec, and outbound pings
 # meant to be absolutely bare bones 
 
-INTERFACE='wlan0';
+INTERFACE='wlan0'
 
 # If you have multiple interfaces, then set these variables to ''
-IN_INTERFACE="-i ${INTERFACE}";
-OUT_INTERFACE="-o ${INTERFACE}";
+IN_INTERFACE="-i ${INTERFACE}"
+OUT_INTERFACE="-o ${INTERFACE}"
+
+OUTBOUND_TCP_SERVICES="80 443 853 123"
+OUTBOUND_UDP_SERVICES="53 123"
 
 print_usage(){
   usage="";
@@ -24,14 +27,14 @@ ARG1 can be:
 -h or help - prints this help message
 HERE
 )
-  echo "$usage";
+  echo "$usage"
 }
 
 check_run_as_root(){
   
   if (( EUID != 0 )); then
-    echo "This script must be run as root/sudo";
-    exit 1;
+    echo "This script must be run as root/sudo"
+    exit 1
   fi
 }
 
@@ -73,27 +76,18 @@ set_rules(){
   ${IPTABLES} --append INPUT -i lo --jump LOG_ACCEPT
   ${IPTABLES} --append OUTPUT -o lo --jump LOG_ACCEPT
     
-  #http/https
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 80 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 80 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 443 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 443 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT  
+    
+  #outbound tcp serrvices, run though the array at top and set up.
+  for service in ${OUTBOUND_TCP_SERVICES}; do
+    ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  done
   
-  #dns
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports 53 -m conntrack --ctstate ESTABLISHED --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports 53 -m conntrack --ctstate NEW,ESTABLISHED --jump LOG_ACCEPT
- 
-  #dns over tls
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 853 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 853 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
- 
-  #ntp
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports 123 -m conntrack --ctstate ESTABLISHED --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports 123 -m conntrack --ctstate NEW,ESTABLISHED --jump LOG_ACCEPT
-  
-  #ntpsec
-  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 123 -m conntrack --ctstate ESTABLISHED --jump LOG_ACCEPT
-  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 123 -m conntrack --ctstate NEW,ESTABLISHED --jump LOG_ACCEPT
+  #outbound tcp serrvices, run though the array at top and set up.
+  for service in ${OUTBOUND_UDP_SERVICES}; do
+    ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  done
   
   #allow outbound icmp, icmpv6 is used in ip6tables so had to put this if in here.
   if [[ ${IPTABLES} = 'iptables' ]]; then
@@ -103,6 +97,7 @@ set_rules(){
     ip6tables --append INPUT ${IN_INTERFACE} -p icmpv6 --icmpv6-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
     ip6tables --append OUTPUT ${OUT_INTERFACE} -p icmpv6 --icmpv6-type 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
   fi
+  
   #catchall
   ${IPTABLES} --append INPUT ${IN_INTERFACE} --jump LOG_DROP
   ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} --jump LOG_DROP
