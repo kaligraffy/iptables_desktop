@@ -1,0 +1,167 @@
+#!/bin/bash
+set -eu
+
+# applies a basic iptables firewall
+
+INTERFACE='wlan0';
+
+# If you have multiple interfaces, then set these variables to ''
+IN_INTERFACE="-i ${INTERFACE}";
+OUT_INTERFACE="-o ${INTERFACE}";
+
+print_usage(){
+  usage="";
+  usage=$(cat << 'HERE' 
+  
+Usage: sudo ./iptables_desktop ARG1
+
+ARG1 can be:
+-e or enable - enable firewall
+-d or disable - disable firewall
+-h or help - prints this help message
+HERE
+)
+  echo "$usage";
+}
+
+check_run_as_root(){
+  
+  if (( EUID != 0 )); then
+    echo "This script must be run as root/sudo";
+    exit 1;
+  fi
+}
+
+iptables_rules(){
+  clear_rules
+  set_rules
+}
+
+ip6tables_rules(){
+  clear_rules ip6tables
+  set_rules ip6tables
+}
+
+disable_firewall(){
+  clear_rules
+  set_permissive_default_policies
+  clear_rules ip6tables
+  set_permissive_default_policies ip6tables  
+}
+
+set_rules(){
+  IPTABLES="${1:-iptables}"
+  #set a restrictive default (so we can only allow in/out exactly what we want)
+  ${IPTABLES} --policy INPUT DROP
+  ${IPTABLES} --policy OUTPUT DROP
+  ${IPTABLES} --policy FORWARD DROP
+  
+  #Create chains for logging  
+  #logs a match then drops the packet
+  ${IPTABLES} --new-chain LOG_DROP  
+  ${IPTABLES} --append LOG_DROP --jump LOG --log-prefix "DROP:" --log-level 6
+  ${IPTABLES} --append LOG_DROP --jump DROP
+  #logs a match then accepts the packet
+  ${IPTABLES} --new-chain LOG_ACCEPT
+  ${IPTABLES} --append LOG_ACCEPT --jump LOG --log-prefix "ACCEPT:" --log-level 6
+  ${IPTABLES} --append LOG_ACCEPT --jump ACCEPT
+  
+  #allow local loopback
+  ${IPTABLES} --append INPUT -i lo --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT -o lo --jump LOG_ACCEPT
+    
+  #http/https
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 80 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 80 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 443 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 443 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT  
+  
+  #dns
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports 53 -m conntrack --ctstate ESTABLISHED --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports 53 -m conntrack --ctstate NEW,ESTABLISHED --jump LOG_ACCEPT
+ 
+  #dns over tls
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 853 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 853 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+ 
+  #ntp
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports 123 -m conntrack --ctstate ESTABLISHED --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports 123 -m conntrack --ctstate NEW,ESTABLISHED --jump LOG_ACCEPT
+  
+  #ntpsec
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports 123 -m conntrack --ctstate ESTABLISHED --jump LOG_ACCEPT
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports 123 -m conntrack --ctstate NEW,ESTABLISHED --jump LOG_ACCEPT
+  
+  #allow outbound icmp, icmpv6 is used in ip6tables so had to put this if in here.
+  if [[ ${IPTABLES} = 'iptables' ]]; then
+    iptables --append INPUT -${IN_INTERFACE} -p icmp --icmp-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    iptables --append OUTPUT ${OUT_INTERFACE} -p icmp --icmp-type 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  else
+    ip6tables --append INPUT ${IN_INTERFACE} -p icmpv6 --icmpv6-type 0 -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ip6tables --append OUTPUT ${OUT_INTERFACE} -p icmpv6 --icmpv6-type 8  -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  fi
+  #catchall
+  ${IPTABLES} --append INPUT ${IN_INTERFACE} --jump LOG_DROP
+  ${IPTABLES} --append OUTPUT ${OUT_INTERFACE} --jump LOG_DROP
+  
+  #print the rules
+  ${IPTABLES} --list --verbose --line-numbers
+  
+}
+
+clear_rules(){
+  IPTABLES="${1:-iptables}"
+ 
+  #delete all rules
+  ${IPTABLES} --flush
+  
+  #delete all chains
+  ${IPTABLES} --delete-chain
+  
+  #zero any counters for network traffic
+  ${IPTABLES} --zero
+}
+
+set_permissive_default_policies(){
+  IPTABLES="${1:-iptables}"
+
+  #set a permissive default 
+  ${IPTABLES} --policy INPUT ACCEPT
+  ${IPTABLES} --policy OUTPUT ACCEPT
+  ${IPTABLES} --policy FORWARD ACCEPT
+}
+
+main(){
+  echo "$(basename "$0") started"
+  check_run_as_root
+  
+  case $1 in
+    enable|-e)
+      #install iptables, and the iptables-persistent package which can load your rules on startup
+      apt-get -yy install iptables iptables-persistent
+      #apply rules
+      iptables_rules
+      ip6tables_rules
+      netfilter-persistent save
+      systemctl enable netfilter-persistent.service
+      ;;
+    disable|-d)
+      disable_firewall;
+      netfilter-persistent save
+      systemctl enable netfilter-persistent.service
+      ;;
+    help|-h)
+      #print help
+      print_usage;
+      ;;
+    *)
+      print_usage;
+      ;;
+  esac
+   
+  echo "$(basename "$0") finished"
+  exit 0;
+}
+
+# Run program
+main "${1:-'-h'}";
