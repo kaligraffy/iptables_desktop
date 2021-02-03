@@ -91,14 +91,14 @@ set_rules(){
   
   #inbound tcp services, run though the array at top and set up.
   for service in ${INBOUND_TCP_SERVICES}; do
-    ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
   done
   
   #inbound udp services, run though the array at top and set up.
   for service in ${INBOUND_UDP_SERVICES}; do
-    ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
   done
   
   local icmp='-p icmp --icmp-type '
