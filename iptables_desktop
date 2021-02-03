@@ -12,7 +12,7 @@ INTERFACE='wlan0'
 IN_INTERFACE="-i ${INTERFACE}"
 OUT_INTERFACE="-o ${INTERFACE}"
 
-OUTBOUND_TCP_SERVICES='80 443 853 123 22'
+OUTBOUND_TCP_SERVICES='80 443 22'
 OUTBOUND_UDP_SERVICES='53 123'
 INBOUND_TCP_SERVICES=''
 INBOUND_UDP_SERVICES=''
@@ -77,37 +77,29 @@ set_rules(){
   ${iptables} --append INPUT -i lo --jump LOG_ACCEPT
   ${iptables} --append OUTPUT -o lo --jump LOG_ACCEPT
   
-  if [ -n "${OUTBOUND_TCP_SERVICES}" ]; then
-    #outbound tcp services, run though the array at top and set up.
-    for service in ${OUTBOUND_TCP_SERVICES}; do
-      ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-    done
-  fi
+  #outbound tcp services, run though the array at top and set up.
+  for service in ${OUTBOUND_TCP_SERVICES}; do
+    ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  done
   
-  if [ -n "${OUTBOUND_UDP_SERVICES}" ]; then
-    #outbound udp services, run though the array at top and set up.
-    for service in ${OUTBOUND_UDP_SERVICES}; do
-      ${iptables} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-    done
-  fi
+  #outbound udp services, run though the array at top and set up.
+  for service in ${OUTBOUND_UDP_SERVICES}; do
+    ${iptables} --append INPUT ${IN_INTERFACE} -p udp -m multiport --sports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p udp -m multiport --dports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+  done
   
-  if [ -n "${INBOUND_TCP_SERVICES}" ]; then
-    #inbound tcp services, run though the array at top and set up.
-    for service in ${INBOUND_TCP_SERVICES}; do
-      ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-    done
-  fi
+  #inbound tcp services, run though the array at top and set up.
+  for service in ${INBOUND_TCP_SERVICES}; do
+    ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+  done
   
-  if [ -n "${INBOUND_UDP_SERVICES}" ]; then
-    #inbound udp services, run though the array at top and set up.
-    for service in ${INBOUND_UDP_SERVICES}; do
-      ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
-      ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
-    done
-  fi
+  #inbound udp services, run though the array at top and set up.
+  for service in ${INBOUND_UDP_SERVICES}; do
+    ${iptables} --append INPUT ${IN_INTERFACE} -p tcp -m multiport --sports ${service} -m conntrack --ctstate NEW,ESTABLISHED,RELATED --jump LOG_ACCEPT
+    ${iptables} --append OUTPUT ${OUT_INTERFACE} -p tcp -m multiport --dports ${service} -m conntrack --ctstate ESTABLISHED,RELATED --jump LOG_ACCEPT
+  done
   
   local icmp='-p icmp --icmp-type '
   #allow outbound icmp, icmpv6 is used in ip6tables so had to put this if in here.
