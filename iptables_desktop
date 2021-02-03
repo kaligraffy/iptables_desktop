@@ -72,7 +72,6 @@ set_rules(){
   ${iptables} --append LOG_ACCEPT --jump LOG --log-prefix "iptables: ACCEPT:" --log-level 6
   ${iptables} --append LOG_ACCEPT --jump ACCEPT
   
-  
   #allow local loopback
   ${iptables} --append INPUT -i lo --jump LOG_ACCEPT
   ${iptables} --append OUTPUT -o lo --jump LOG_ACCEPT
